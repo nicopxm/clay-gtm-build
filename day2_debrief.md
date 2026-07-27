@@ -271,3 +271,153 @@ Ledger 1,914.3. Git commit: `Step 2: contact waterfall (Surfe → Clay escalatio
 
 Ready for Step 3 (HubSpot push with deliberate two-push dedupe test).
 
+---
+
+# Step 3: HubSpot push
+ 
+**Date:** 2026-07-27
+**Ledger opening balance (Step 3 open):** 1,914.3
+**Ledger closing balance (Step 3 close):** 1,914.3
+**Total step spend:** 0 credits (HubSpot integration actions do not consume Clay enrichment credits)
+**Rows in scope:** 2 (Hyperbound, Hologram — both with icp_score_v2 >= 50, both with `ultra_sure` email from Step 2)
+ 
+## Credit ledger
+ 
+| Action | Rows | Est cost | Actual cost | Running balance |
+|---|---|---|---|---|
+| Step 3 — Lookup object (Hyperbound, first push) | 1 | 0 | 0 | 1,914.3 |
+| Step 3 — Create object (Atul Raghunathan, first push) | 1 | 0 | 0 | 1,914.3 |
+| Step 3 — Re-run Lookup + Update object (Atul, second push, dedupe test) | 1 | 0 | 0 | 1,914.3 |
+| Step 3 — Lookup + Create object (Stephen Chin, Hologram push) | 1 | 0 | 0 | 1,914.3 |
+| **Step 3 total spend** | | **0** | **0** | **1,914.3** |
+ 
+HubSpot integration actions in Clay do not consume enrichment credits — they operate against HubSpot's API directly. Every action config panel confirmed 0 credit cost before running. Ledger unchanged across all 4 Step 3 actions.
+ 
+---
+ 
+## Design decisions locked before push
+ 
+### Dedupe pattern — Path 1 (explicit lookup-first)
+ 
+Two viable dedupe patterns were considered:
+ 
+- **Path 1 (chosen):** Chained Lookup → Update-or-Create actions with conditional gates. Clay's Lookup returns existing Contact ID if match found; auto-run gates route to Update (if ID present) or Create (if ID absent). Explicit lookup-first pattern makes the dedupe logic inspectable in the run history.
+- **Path 2 (rejected):** Fire Create unconditionally and rely on HubSpot's native email-based dedupe to reject or silently update duplicates. Simpler but pushes the dedupe logic server-side into HubSpot's black box.
+**Chose Path 1** because REALITY §3 (#24 CLOSED, 2026-07-21) established that the pipeline enforces 30-day domain-keyed dedupe explicitly, not via HubSpot's default behavior. Two-runtimes consistency required Clay to reproduce the explicit-check pattern, not delegate to HubSpot. Path 2 would have worked, but the write-up beat "same dedupe contract, two runtimes" requires an explicit gate to point at.
+ 
+### Field mapping — 6 fields at Contact level
+ 
+Per REALITY §3 the pipeline pushes `name, email, company, lead_source` and has the `icp_score` custom property created but never populated (writing to it ships in pipeline issue #29, not built). Clay's build writes to all 6 including the first-ever real values in `icp_score`.
+ 
+Field-by-field mapping:
+ 
+| HubSpot property | Clay column | Type |
+|---|---|---|
+| `firstname` | `{{first_name}}` (formula: split from contact_name) | Standard |
+| `lastname` | `{{last_name}}` (formula: split from contact_name) | Standard |
+| `email` | `{{email}}` (from Icypeas output) | Standard |
+| `company` | `{{company}}` (seed data) | Standard |
+| `lead_source` | `{{lead_source}}` (formula: constant "Clay GTM Table") | Custom |
+| `icp_score` | `{{icp_score_v2}}` | Custom |
+ 
+### Object-level scope — Contact only, not Contact + Company
+ 
+HubSpot's data model has separate Contacts (people) and Companies (accounts) objects. Considered Path A (Contact-level push only) vs. Path B (Company + Contact with association). Chose Path A because REALITY §3 says the pipeline pushes as Contacts; two-runtimes consistency wins over data-model purism for this sprint. Real tradeoff: `icp_score` is a company-level signal on a person-level record. Noted for the write-up as an intentional call, not an oversight.
+ 
+### Dedupe test protocol — deliberate two-push on Hyperbound
+ 
+Sprint spec required: push one row, verify in HubSpot, push same row again, confirm update-not-duplicate, screenshot both states, then bulk push remaining rows. Executed as:
+ 
+1. First push: filter Lookup + Create gates to `{{company}} == "Hyperbound"` only. Lookup returns "❌ No objects found." Create fires. Atul appears in HubSpot as new Contact ID `237877930071`.
+2. Second push: force re-run Lookup on same row. Lookup returns Atul's Contact ID. Update fires against existing record. No new Contact created.
+3. Verify HubSpot Contacts search for Atul returns exactly 1 entry. Dedupe verified.
+4. Bulk push: widen gate to Hologram. Stephen Chin created as second Contact.
+---
+ 
+## What was built
+ 
+Formula columns (all zero-credit):
+ 
+- `first_name` = `{{contact_name}}.split(" ")[0]`
+- `last_name` = `{{contact_name}}.split(" ").slice(1).join(" ")`
+- `lead_source` = `"Clay GTM Table"` (constant string)
+HubSpot integration actions (all zero-credit):
+ 
+- **Lookup object** — searches HubSpot Contacts by email, populates `hubspot_contact_id` column with the Contact ID (as nested JSON object) or `"❌ No objects found"` on miss
+- **Create object** — creates new Contact with 6-field mapping, auto-run gated to fire only when no existing Contact matches
+- **Update object** — updates existing Contact by ID, auto-run gated to fire only when Lookup returned an existing ID
+Auto-run gates across the chain:
+ 
+- Lookup: `{{company}} == "Hyperbound"` (initial), then widened to `{{company}} == "Hologram"` for the Hologram push
+- Create: `{{company}} == "Hyperbound" && {{hubspot_contact_id}} == "❌ No objects found"` (initial); simplified to `{{company}} == "Hologram"` for the Hologram push
+- Update: nested-path check `{{hubspot_contact_id.results[0].id}}` — worked cleanly on Hyperbound's second push, unreliable on Hologram
+---
+ 
+## Deviations, learnings, and honest limitations
+ 
+### 18. Clay Lookup returns status strings, not nulls
+ 
+HubSpot Lookup action populates non-matching cells with the string `"❌ No objects found"` — a user-facing label with an emoji, not a null value. Downstream auto-run formulas checking for empty results via `!{{col}}` or `.length == 0` returned false against this content.
+ 
+**Fix:** explicit string equality check against the exact "no results" string.
+ 
+**Lesson:** Clay's action outputs are optimized for table-view readability, not for programmatic downstream use. Formula authors have to know the specific status strings each action emits, or test with a temp column before writing conditional gates.
+ 
+### 19. Hologram push — simplified gate after Clay reference layer proved unreliable
+ 
+The 3-action chain (Lookup → Update or Create) with nested reference paths (`{{col.results[0].id}}`) worked cleanly on Hyperbound but failed to resolve on Hologram's row after Lookup returned `"❌ No objects found"`. Multiple attempts at conditional gates evaluated false when they should have evaluated true. Rather than continue debugging Clay's reference resolution across chained action outputs mid-sprint, pushed Stephen with a simplified gate (`{{company}} == "Hologram"`) and relied on HubSpot's server-side email dedupe as the safety net.
+ 
+**Real cost:** Hologram's push skipped the explicit lookup-first dedupe verification that Hyperbound got. Dedupe safety is preserved (HubSpot's native email dedupe would have caught any duplicate) but the "same contract, two runtimes" write-up beat is 1-of-2 clean.
+ 
+**Lesson:** Clay's action-output references become brittle when chained across multiple HubSpot actions with nested response objects. The status strings and JSON wrappers Clay populates for readability compound with each chain step, making downstream conditional logic harder to write than it should be. For a production build, this would be worth investigating with Clay support or moving to a webhook-out pattern instead of Clay's built-in HubSpot actions. For this sprint, the simplified gate is the pragmatic call.
+ 
+### 20. First-ever write to HubSpot's `icp_score` custom property
+ 
+Per REALITY §3, the pipeline created the `icp_score` HubSpot custom property but never wrote to it — the scoring itself ships in pipeline issue #29 (not built as of this sprint). Clay's build wrote real values (68.75 for Hyperbound, 54.75 for Hologram) to that property for the first time. Both values verified via HubSpot's Contact record properties view.
+ 
+**Not a deviation, a write-up beat worth logging alongside the deviations because it's the strongest single "same contract, two runtimes" moment in the sprint.** The pipeline team built `icp_score` as future-facing infrastructure targeting scoring pipeline issue #29. Clay's build closed the loop from "score column exists as target" to "score value populated as data" without the pipeline scoring being built yet. The two runtimes aren't just parallel — they're complementary within the same target schema. Clay's build proves the schema receives what the pipeline will eventually send.
+ 
+### 21. Cache/refresh behavior on Lookup — sticky "not found" state
+ 
+First re-run of Lookup after Atul's Create returned the same `"❌ No objects found"` result, despite Atul existing in HubSpot at that point. Toggle Auto-run OFF → ON on the Lookup config forced a fresh API call, which then returned Atul's Contact ID.
+ 
+Working hypothesis: Clay caches Lookup results per-cell and requires an explicit state change to invalidate. Force Re-run flag or auto-run toggle change acts as the cache-bust.
+ 
+**Lesson:** Clay's action re-run isn't always a fresh execution — it may return cached results. When testing dedupe or state-change behavior specifically, toggle the auto-run OFF then ON, or delete the cell value to force a fresh call. Worth naming in the debrief because this could bite anyone building a stateful workflow that depends on Clay observing HubSpot state changes mid-run.
+ 
+### 22. Contact-level `icp_score` — intentional data-model tradeoff
+ 
+Pushed `icp_score` to the Contact object, not to a Company object. The score is a company-level signal (based on firmographic + posting-body data about the account, not the person), but the pipeline convention per REALITY §3 is Contact-level pushes and two-runtimes consistency won over data-model purism.
+ 
+**Design note for the write-up:** a production version would consider the score as a Company property with Contacts inheriting via association. Named as a real tradeoff so a hiring manager reviewing the debrief sees that the decision was made deliberately, not by omission.
+ 
+---
+ 
+## Screenshot log — Step 3
+ 
+- `18a_hubspot_lookup_config.png` — Lookup action config with `{{company}} == "Hyperbound"` gate and Email input mapped to Icypeas output
+- `18b_hubspot_create_config.png` — Create action config with 6 field mappings and status-string gate
+- `19_hubspot_atul_created.png` — Atul's HubSpot Contact record with 6 field values visible (including `icp_score = 68.75` and `lead_source = "Clay GTM Table"` in All Properties view)
+- `20_hubspot_update_config.png` — Update action config with nested-path Object ID and 6 field mappings
+- `21_hubspot_dedupe_verified.png` — HubSpot Contacts list showing single Atul entry after two pushes (Create → Update)
+- `22_hubspot_hologram_created.png` — Stephen Chin's HubSpot Contact record with 6 field values (Hologram push completed via simplified gate)
+- `23_hubspot_both_contacts.png` — HubSpot Contacts list showing both Atul Raghunathan and Stephen Chin
+---
+ 
+## Result
+ 
+Two contacts pushed to HubSpot, both with all 6 fields populated including the first-ever writes to the `icp_score` custom property.
+ 
+| Company | Contact | Email | icp_score written | HubSpot Contact ID | Dedupe verified |
+|---|---|---|---|---|---|
+| Hyperbound | Atul Raghunathan | atul@hyperbound.ai | 68.75 | 237877930071 | Yes (Create → Update, single record confirmed) |
+| Hologram | Stephen Chin | stephen.chin@hologram.io | 54.75 | populated (Contact ID assigned by HubSpot) | Partial (server-side native dedupe only; simplified gate bypassed explicit lookup-first check) |
+ 
+## Step 3 close
+ 
+Ledger 1,914.3 (no change — HubSpot integration actions do not consume Clay enrichment credits). Both target Contacts live in HubSpot with all 6 fields populated. Dedupe verified on Hyperbound via explicit lookup-first pattern (Create → Update, single record confirmed by HubSpot Contacts search). Hologram push completed via simplified gate; server-side email dedupe preserved the safety net.
+ 
+Git commit: `Step 3: HubSpot push with dedupe test (Atul via lookup-first, Stephen via simplified gate)`.
+ 
+Ready for Step 4 (Clay vs. n8n benchmark).
+ 
