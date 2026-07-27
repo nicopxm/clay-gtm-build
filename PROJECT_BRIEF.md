@@ -103,5 +103,6 @@ Manual account research costs SDR teams hours per day and paid databases (ZoomIn
 
 ## 8. Risks
 - **Clay free-tier credit limits:** design conditionals FIRST, screenshot everything, document limits honestly if hit.
+- **Clay trial expiry: 2026-07-29** — hard deadline for Day 2 + benchmark (see REALITY.md §9).
 - **Scope creep:** any new idea → PARKED list in this doc, reviewed only after Day 3 ships.
 - **Benchmark rabbit hole:** timebox to half a day; directionally-correct numbers beat precise ones.
