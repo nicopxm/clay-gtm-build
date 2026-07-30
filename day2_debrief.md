@@ -420,4 +420,117 @@ Ledger 1,914.3 (no change — HubSpot integration actions do not consume Clay en
 Git commit: `Step 3: HubSpot push with dedupe test (Atul via lookup-first, Stephen via simplified gate)`.
  
 Ready for Step 4 (Clay vs. n8n benchmark).
+
+---
+
+# Step 4: Clay vs. n8n benchmark
+
+**Date:** 2026-07-29 to 2026-07-30
+**Ledger opening balance (Step 4 open):** 1,914.3
+**Ledger closing balance (Step 4 close):** 1,914.3
+**Total step spend:** 0 Clay credits
+**Rows in scope:** 8 (all icp_gate = true accounts from Day 1 — Hyperbound, Hologram, Suger.io, Lorikeet, GC AI, Runlayer, Reducto, Turnkey)
+
+## Credit ledger
+
+| Action | Rows | Est cost | Actual cost | Running balance |
+|---|---|---|---|---|
+| n8n Website Scraper (8 companies, run manually per lead via pinned trigger data) | 8 | 0 | 0 | 1,914.3 |
+| n8n Tech Stack Detector (8 companies) | 8 | 0 | 0 | 1,914.3 |
+| n8n News RSS (8 companies) | 8 | 0 | 0 | 1,914.3 |
+| **Step 4 total spend** | | **0** | **0** | **1,914.3** |
+
+No Clay actions ran in Step 4 — this step benchmarks the existing n8n Lead Intelligence Pipeline against Steps 1–3's Clay results on the same 8 accounts. All spend is $0 by design; the n8n side runs on Wop's own VPS infra, not Clay credits.
+
+---
+
+## Design decisions
+
+**Sample:** the same 8 gate-passers from Day 1's `icp_gate = true` filter, so the comparison is apples-to-apples against Steps 1–3's Clay results rather than a fresh, differently-biased sample.
+
+**Domains resolved from `seed_list.csv`, not guessed from ATS URLs** — caught one real discrepancy before running anything: Lorikeet's actual domain is `lorikeetcx.ai`, not the `lorikeet.com` first assumed. Corrected in the CSV template before any workflow ran.
+
+**Five comparison dimensions** (`outputs/step4_comparison_table.md`): match rate, cost per enriched account, enrichment fields returned, data-quality handling, and setup effort — chosen to cover both the quantitative outcome (does it work, what does it cost) and the qualitative build experience (what does it take to run), per the Day 3 write-up's build-vs-buy mandate.
+
+**Scope-matched to what n8n actually has built**: benchmarked only the 3 enrichment sub-workflows that exist and don't require Claude API calls (website scraper, tech-stack fingerprint, news RSS) — not the Intelligence Scorer (#29) or a HubSpot push equivalent, since neither is built per REALITY §4. This means the benchmark covers roughly the Step 1 slice of Clay's pipeline, not Steps 2–3's contact/CRM work — a scope asymmetry named explicitly in the comparison table rather than glossed over.
+
+---
+
+## What was built
+
+- **8 placeholder lead rows** inserted into the pipeline's Supabase `leads` table (`source = 'benchmark_step4'`, clearly tagged for later cleanup) — required because all 3 sub-workflows take a Supabase lead `id`, not a raw domain, as input.
+- **`outputs/step4_benchmark_capture.csv`** — 24 sub-workflow runs (8 companies × 3 workflows) logged with status, tool/item counts, timing, and per-row notes. One accounting caveat carried in the CSV itself: `scrape_api_calls` on the 3 partial rows (GC AI, Runlayer, Reducto) assumes the failed page consumed both fetch attempts per the workflow's one-retry design — a design-derived estimate, not an observed count. The 5 clean rows' counts are observed (single-entry Fetch Page sub-executions, no retry pairs).
+- **`outputs/step4_comparison_table.md`** — the 5-dimension comparison table plus a drafted 3-sentence verdict, pending Wop's sign-off before it's treated as final.
+
+---
+
+## Deviations, learnings, and honest limitations
+
+### 23. n8n sub-workflows have no webhook trigger — manual pin-data required for every run
+
+All 3 sub-workflows (Website Scraper, Tech Stack Detector, News RSS) use an `executeWorkflowTrigger` ("When Executed by Another Workflow") as their entry point, not a webhook. In production they're only ever invoked by the Enrichment Orchestrator. There is no HTTP endpoint to hit for an ad-hoc benchmark run — each of the 24 invocations had to be triggered manually in the n8n editor by pinning `{"id": "<lead-uuid>"}` onto the trigger node and clicking Execute.
+
+**Lesson:** a workflow with no direct entry point is invisible to anything outside its own orchestrator. This is a real, concrete cost of REALITY §1's "#23 orchestration not fully wired" note — it doesn't just mean leads aren't auto-enriched end-to-end, it means the enrichment logic itself can't be exercised in isolation without either building a harness or clicking through the UI by hand.
+
+### 24. Batch execution would have silently corrupted data — caught by code review, not by running it
+
+Considered pinning all 8 companies onto a single trigger at once to cut 24 manual runs down to 3. Reading `Aggregate Website Status`'s code (`website-scraper.json`) first: it resolves the current lead via `$('Parse robots.txt').first().json`, a single-lead assumption. Feeding 8 leads' worth of page-fetch results through in one execution would have silently merged all 8 companies' scraped pages under whichever lead happened to be `.first()`, corrupting the Supabase `enrichment.website` column for 7 of 8 companies with no error thrown.
+
+**Lesson:** this is the same category of risk flagged in Step 1's Lesson #9 (AI-generated formulas that are compile-clean but semantically wrong) — a workflow can run successfully and still produce corrupted output when an implicit assumption (here: exactly one lead per execution) is violated by scaling up usage it was never designed for. Caught by reading the code before running it, not by observing bad output after. **Confirms this is not a benchmarking limitation — it's a real constraint on how the pipeline can be operated even in production**, since any future bulk backfill or re-enrichment job would hit the same corruption risk.
+
+### 25. Manual duration capture introduced a real transcription error, caught by cross-referencing execution IDs
+
+While copy-pasting execution durations from n8n's Executions list by hand, Lorikeet's and GC AI's timings got swapped, as did Runlayer's and Reducto's (Turnkey's was correct both times). Caught by noticing the n8n execution ID sequence (`1081-1086`, `1087-1092`, etc.) didn't match the company labels in a later, corrected paste, and re-deriving the true mapping from ID order rather than the (incorrect) labels.
+
+**Lesson:** the same "verify before trusting pasted/generated data" discipline that applied to Clay's AI-generated formulas (Step 1, Lesson #9) and Clay's cost-display mismatches (Step 2, Lesson #12) applies just as much to manually-transcribed n8n output. Execution IDs are monotonically increasing and were the actual ground truth here — worth checking IDs, not just labels, whenever timing data changes hands manually.
+
+### 26. Cost estimate collapsed from "ESTIMATE" to a confirmed $0.00
+
+REALITY §2 requires n8n cost figures be labeled ESTIMATE (Claude API pricing × observed call counts), since no real cost instrumentation exists. But none of the 3 sub-workflows in this benchmark's scope call the Claude API at all — website scraper is HTTP fetches, tech-stack detector is local config matching, news RSS is a free Google RSS query. So `estimated_cost_usd` isn't an estimate needing a REALITY-mandated label here — it's a confirmed measurement of zero API spend, verified by reading each sub-workflow's node list for HTTP Request nodes before assuming otherwise.
+
+**Lesson:** REALITY §2's ESTIMATE rule protects against presenting an unmeasured number as measured — it doesn't require hedging a number that's genuinely $0 by construction. Worth being precise about which case applies rather than defaulting to the more cautious label everywhere.
+
+### 27. The name-collision limitation, quantified against real data
+
+PIPELINE_REFERENCE.md names name-collision as a "deliberate, accepted limitation" of the News RSS sub-workflow. This benchmark put real numbers behind it: 2/8 companies (Runlayer, Lorikeet) got 100% relevant news, both driven by genuinely distinctive names; 3/8 (Hologram, GC AI, Turnkey) got 100% collision noise, each colliding with either a common word (Turnkey), a physics/tech term (Hologram), or a government initiative and stock-ticker company (GC AI); Reducto landed in between (2 of 5 relevant, 3 colliding with a Spanish beach of the same name); Hyperbound and Suger.io returned 0 items (valid — no coverage yet, not a collision case).
+
+**Lesson:** the severity of this limitation correlates directly with company-name distinctiveness, not with company size or category. A production version would need a relevance filter (e.g., requiring the company's domain or a distinguishing keyword to co-occur in the article) — the pipeline's own docs already flag this as future work, and this benchmark is the first real evidence of how often it would actually fire.
+
+---
+
+## Screenshot log — Step 4
+
+N/A — Step 4 is data-only. No new Clay screenshots (no Clay actions ran); n8n execution results were captured directly into `outputs/step4_benchmark_capture.csv` rather than as screenshots.
+
+---
+
+## Result
+
+Full comparison in `outputs/step4_comparison_table.md`. Headline findings:
+
+- **Cost:** Clay ran at ~0.325 credits/account (Steps 1–3); n8n's equivalent scope ran at a confirmed $0.00/account — but n8n's scope covers only site text + tech fingerprint + news, not Clay's full contact-to-CRM pipeline.
+- **Match rate:** both systems handle imperfect real-world data gracefully at the structural level (Clay's dead-posting gate, n8n's partial-page status), but n8n's news sub-workflow reports false-positive name collisions as clean successes — a semantic gap neither system's status vocabulary currently catches.
+- **Setup effort:** Clay's friction was mostly formula-engine and UI quirks (22 logged deviations); n8n's friction — surfaced directly by this benchmark — was structural: no webhook access, a single-lead execution model, and code that would silently corrupt data if scaled beyond its designed usage pattern.
+
+Verdict (signed off by Wop, 2026-07-30): Clay is the right call for a fast, deadline-bound sprint like this one; n8n is worth the integration effort for a mature, high-volume pipeline where marginal cost matters more than setup speed — once #23 orchestration (REALITY §1) ships, since today's one-lead-at-a-time model doesn't scale to batch work without manual babysitting.
+
+## Step 4 close
+
+Ledger 1,914.3 (unchanged — no Clay actions ran). Git commit: `Step 4: Clay vs. n8n benchmark on 8 gate-passers`.
+
+Sprint complete: Steps 1–4 done. Ready for Day 3 write-up.
+
+---
+
+# Day 3 write-up queue
+
+Beats that must not get lost when drafting. Mirrors Day 1's "Day 2 Queue" pattern.
+
+1. **Results ¶1 — subset disclosure up front, not buried.** The sprint spec said ~100 rows; 50 shipped because Clay's free trial caps tables at 50 rows. The "deliberate subset, proportions preserved" line (subset_notes.md, day1_debrief §6) goes in the first paragraph of Results.
+2. **Economics — price qualification as the product.** The 45.4 cr/CRM-ready-lead figure is fully-loaded and will draw "isn't that expensive?" — the answer is that ~88 of the 90.7 credits bought the disqualification of 42 accounts. Cost-per-qualified-lead only looks bad if qualification is priced at zero. One sentence in Economics so the number lands as a feature.
+3. **Economics — credit→dollar decision: native credits only (decided 2026-07-30).** All figures stay in Clay's billing unit, with one deliberate sentence in Economics explaining why: no documented conversion rate exists in project docs, and the trial credits were free — any dollar figure would be an invented number on a $0 sprint. Do not convert.
+4. **Build-vs-buy — Hologram signal divergence.** n8n's fingerprint found only Next.js on Hologram's public site; Clay scored Hologram 75 on stack from posting text (HubSpot/Clay/n8n/Zapier in hiring copy). Not a contradiction — internal tooling vs. public frontend are different surfaces; the two systems read complementary signals. Currently lives only in a CSV note (step4_benchmark_capture.csv, Hologram fingerprint_notes) — lift it into the write-up.
+5. **Design Decisions spine — "caught by inspection before it cost anything."** The through-line across all four steps: AI-inverted formula (#9), SPA fallback signal (#4), batch-corruption risk (#24), transcription swap (#25) — every anomaly caught before it burned credits or corrupted data. Structure Design Decisions around this pattern rather than scattering it across 27 numbered entries.
+6. **Step 2 caveat — n=2 is a pattern demonstration, not a hit rate.** The escalation math (0.35 cr avg vs. 1.0 blanket) is real arithmetic; don't let the write-up imply provider hit rates from two contacts.
+7. **Step 3 caveat — dedupe asterisk stays visible.** "Same dedupe contract, two runtimes" worked 1-of-2 clean; keep deviation #19's framing verbatim (server-side safety net preserved, root cause named, production fix identified).
  
