@@ -74,12 +74,15 @@ Write-up talking point: "The conditional run saved 5 × 0.5 = 2.5 credits — sm
 |------|-----------|-------|
 | G1 | posting_title regex | All 50 rows pass — all titles sourced as RevOps/GTM roles |
 | G2 | Employee count 20–200 | Main killer: 17 rows >200 (OpenAI 10k, Gusto 4.4k, Dandy 1.9k, etc.) |
-| G3 | US-based | 2 non-US (Dust=FR, Finout=IL); 5 blank-domain skipped enrichment |
+| G3 | US-based | 2 non-US (Dust=FR, Finout=IL); 3 rows enriched but returned no country |
 | G4 | Series A or B | 2 rows Series C or other; 1 row no Harmonic data returned |
 
-**Failure breakdown:**
-- Failed on missing data: ~8 rows (5 blank-domain skipped; 1 no Harmonic data; 2 enrichment returned no country)
-- Failed on criteria: ~34 rows (employee count out of range, non-US, wrong funding stage)
+**Failure breakdown (corrected 2026-08-01 — see note below):**
+- Failed on missing data: **9 rows** (5 blank-domain at G2; 3 no country returned at G3; 1 no Harmonic data at G4)
+- Failed on criteria: **33 rows** (17 headcount >200; 12 headcount <20; 2 non-US; 2 wrong funding stage)
+- 9 + 33 = 42 ✓
+
+> **Correction note (2026-08-01):** this section originally read "~8 missing data / ~34 criteria," with blank-country attributed as 2 rows rather than 3. Those were in-build estimates (marked with tildes) written before the per-row failure attribution was completed. `day1_debrief.md` §3 is the authoritative count — it attributes every one of the 42 failures to a first-failing gate and reconciles to 42. Corrected here so the two files agree; **day1_debrief.md outranks this file on gate results.**
 
 **Credit spend to reach gate:**
 - Clay Enrich Company (G2+G3 data): 22.5 cr
@@ -87,7 +90,7 @@ Write-up talking point: "The conditional run saved 5 × 0.5 = 2.5 credits — sm
 - Total enrichment spend: 62.5 cr
 - Balance after Step 3: 1,942.5 cr
 
-Write-up line: *"8 of 50 rows survived all four gates. ~8 failed on missing data at $0 in rescue lookups — the cost of the deliberate false-negative policy."*
+Write-up line: *"8 of 50 rows survived all four gates. 9 failed on missing data at $0 in rescue lookups — the cost of the deliberate false-negative policy."*
 
 ## Credit ledger (reconciled against Clay UI)
 

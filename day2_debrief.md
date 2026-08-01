@@ -1,5 +1,7 @@
 # day2_debrief.md — Step 1: posting-body scrape + re-score
 
+> **PII note (applied 2026-08-01, file-wide):** the two contact email addresses surfaced in Step 2 and pushed in Step 3 are masked throughout this file (`a***@hyperbound.ai`, `s***@hologram.io`). They were real, verified addresses returned at Icypeas's `ultra_sure` confidence tier — the masking is a publication decision, not missing or fabricated data. Names, titles, and LinkedIn URLs are left intact: they're public profile information and they're the evidence that the contact waterfall surfaced the right person. Local domains are preserved so the `ultra_sure` work-email claim stays checkable in shape.
+
 **Date:** 2026-07-21
 **Sprint day:** 2 of 3
 **Step:** 1 of 4 (opener — body scrape + re-score)
@@ -151,8 +153,8 @@ Ready for Step 2 (contact waterfall).
 
 **Date:** 2026-07-22
 **Ledger opening balance (Step 2 open):** 1,915.4
-**Ledger closing balance (Step 2 close):** 1,914.4
-**Total step spend:** 1.2 credits
+**Ledger closing balance (Step 2 close):** 1,914.3
+**Total step spend:** 1.1 credits
 **Rows in scope:** 2 (Hyperbound, Hologram — both with icp_score_v2 >= 50)
 
 ## Threshold decision
@@ -176,7 +178,7 @@ Escalation gate: only ran on the specific row that missed. Clay Find Contacts au
 
 | Provider | Rate | Rows run | Result |
 |---|---|---|---|
-| Icypeas "Find work email" | 0.2 cr | 2 | Hyperbound: atul@hyperbound.ai (`ultra_sure`, FOUND). Hologram: stephen.chin@hologram.io (`ultra_sure`, FOUND). |
+| Icypeas "Find work email" | 0.2 cr | 2 | Hyperbound: a***@hyperbound.ai (`ultra_sure`, FOUND). Hologram: s***@hologram.io (`ultra_sure`, FOUND). |
 
 Both emails came back at Icypeas's highest confidence tier on the first (cheapest) provider. No email-side escalation needed.
 
@@ -198,14 +200,16 @@ Total post-Step-2 populated data per row:
 
 | Row | contact_name | contact_linkedin | title | email | certainty |
 |---|---|---|---|---|---|
-| Hyperbound | Atul Raghunathan | linkedin.com/in/atul-raghunathan | Co-Founder & CTO/CRO | atul@hyperbound.ai | ultra_sure |
-| Hologram | Stephen Chin | linkedin.com/in/stephen-chin-9541819/ | Revenue Operations Manager | stephen.chin@hologram.io | ultra_sure |
+| Hyperbound | Atul Raghunathan | linkedin.com/in/atul-raghunathan | Co-Founder & CTO/CRO | a***@hyperbound.ai | ultra_sure |
+| Hologram | Stephen Chin | linkedin.com/in/stephen-chin-9541819/ | Revenue Operations Manager | s***@hologram.io | ultra_sure |
 
 ## Deviations, learnings, and honest limitations
 
 ### 12. Clay cost display unreliable — action library vs. config panel vs. actual bill
 
-Clay's action library showed 0.5 cr/row for "Find Contacts at Company" (By Clay). The action's config panel displayed 10.5 cr/row after fields were selected. Actual billed cost after run: 0.5 cr. Config-panel display was 20x higher than actual bill.
+Clay's action library showed 0.5 cr/row for "Find Contacts at Company" (By Clay). The action's config panel displayed 10.5 cr/row after fields were selected. Actual billed cost after run: 0.5 cr. Config-panel display was 21x higher than actual bill.
+
+**Arithmetic correction (applied 2026-07-31):** this entry originally read "20x." 10.5 ÷ 0.5 = 21. Corrected here and in `outputs/step4_comparison_table.md`, which carried the same figure. Noting rather than silently editing, per the ledger-correction convention above — an error in a deviation log about unreliable numbers is worth leaving visible.
 
 Zero credit impact this time (trivial spend), but on a higher-stakes action or a tight budget, working from the config-panel estimate would have blocked or triaged a run that was actually affordable.
 
@@ -249,10 +253,10 @@ Icypeas at 0.2 cr/row is the cheapest email provider in Clay's stack. Both rows 
 
 ## Screenshot log — Step 2
 
-- `14_surfe_config.png` — Surfe "Find people at company" config with `{{icp_score_v2}} >= 50` auto-run formula, title list, and 2-row preview visible
-- `15_clay_find_contacts_hologram_config.png` — Clay "Find Contacts at Company" config with `{{company}} == "Hologram"` auto-run formula, title keywords, and 1-row preview visible
-- `16_icypeas_config.png` — Icypeas "Find work email" config with `contact_name` mapped, auto-run formula, and 2-row preview visible
-- `17_step2_final_table.png` — table view showing Hyperbound + Hologram rows with all Step 2 output columns populated (contact_name, contact_linkedin, title, email, certainty)
+- `12_surfe-config.png` — Surfe "Find people at company" config with `{{icp_score_v2}} >= 50` auto-run formula, title list, and 2-row preview visible
+- `13_clay-find-contacts-config.png` — Clay "Find Contacts at Company" config with `{{company}} == "Hologram"` auto-run formula, title keywords, and 1-row preview visible
+- `14_icypeas-config.png` — Icypeas "Find work email" config with `contact_name` mapped, auto-run formula, and 2-row preview visible
+- `15_step-2-table.png` — table view showing Hyperbound + Hologram rows with all Step 2 output columns populated (contact_name, contact_linkedin, title, email, certainty)
 
 ## Result
 
@@ -260,8 +264,8 @@ Two contacts, two ultra_sure work emails, ready for HubSpot push (Step 3):
 
 | Company | Name | Title | Email | Certainty |
 |---|---|---|---|---|
-| Hyperbound | Atul Raghunathan | Co-Founder & CTO/CRO | atul@hyperbound.ai | ultra_sure |
-| Hologram | Stephen Chin | Revenue Operations Manager | stephen.chin@hologram.io | ultra_sure |
+| Hyperbound | Atul Raghunathan | Co-Founder & CTO/CRO | a***@hyperbound.ai | ultra_sure |
+| Hologram | Stephen Chin | Revenue Operations Manager | s***@hologram.io | ultra_sure |
 
 Effective cost: 1.1 cr for 2 fully-enriched leads = 0.55 cr per lead. Compare to industry benchmarks in Day 3 write-up (ZoomInfo per-record cost, Apollo per-contact cost, etc.).
 
@@ -395,13 +399,16 @@ Pushed `icp_score` to the Contact object, not to a Company object. The score is 
  
 ## Screenshot log — Step 3
  
-- `18a_hubspot_lookup_config.png` — Lookup action config with `{{company}} == "Hyperbound"` gate and Email input mapped to Icypeas output
-- `18b_hubspot_create_config.png` — Create action config with 6 field mappings and status-string gate
-- `19_hubspot_atul_created.png` — Atul's HubSpot Contact record with 6 field values visible (including `icp_score = 68.75` and `lead_source = "Clay GTM Table"` in All Properties view)
-- `20_hubspot_update_config.png` — Update action config with nested-path Object ID and 6 field mappings
-- `21_hubspot_dedupe_verified.png` — HubSpot Contacts list showing single Atul entry after two pushes (Create → Update)
-- `22_hubspot_hologram_created.png` — Stephen Chin's HubSpot Contact record with 6 field values (Hologram push completed via simplified gate)
-- `23_hubspot_both_contacts.png` — HubSpot Contacts list showing both Atul Raghunathan and Stephen Chin
+- `16_hubspot_lookup_config.png` — Lookup action config with `{{company}} == "Hyperbound"` gate and Email input mapped to Icypeas output
+- `17_hubspot_create_config.png` — Create action config with 6 field mappings and status-string gate
+- `18_hubspot_atul_created.png` — Atul's HubSpot Contact record with 6 field values visible (including `icp_score = 68.75` and `lead_source = "Clay GTM Table"` in All Properties view)
+- `19_hubspot_update_config.png` — Update action config with nested-path Object ID and 6 field mappings
+- `20_hubspot_dedupe_verified.png` — HubSpot Contacts list showing single Atul entry after two pushes (Create → Update)
+- `21_hubspot_hologram_created.png` — Stephen Chin's HubSpot Contact record with 6 field values (Hologram push completed via simplified gate)
+- `22_hubspot_both_contacts.png` — HubSpot Contacts list showing both Atul Raghunathan and Stephen Chin
+- `23_clay_usage_final.png` — Clay Usage panel at sprint close, confirming the 1,914.3 closing balance
+
+**Filename correction (applied 2026-08-01):** the Step 2 and Step 3 screenshot logs originally listed planned filenames (`14_surfe_config.png` … `23_hubspot_both_contacts.png`) that were never the names actually written to disk — the real files run `12_`–`22_`, and `23_clay_usage_final.png` was captured but never logged. All 11 references corrected against `ls screenshots/`. Every screenshot cited in this repo now resolves.
 ---
  
 ## Result
@@ -410,8 +417,8 @@ Two contacts pushed to HubSpot, both with all 6 fields populated including the f
  
 | Company | Contact | Email | icp_score written | HubSpot Contact ID | Dedupe verified |
 |---|---|---|---|---|---|
-| Hyperbound | Atul Raghunathan | atul@hyperbound.ai | 68.75 | 237877930071 | Yes (Create → Update, single record confirmed) |
-| Hologram | Stephen Chin | stephen.chin@hologram.io | 54.75 | populated (Contact ID assigned by HubSpot) | Partial (server-side native dedupe only; simplified gate bypassed explicit lookup-first check) |
+| Hyperbound | Atul Raghunathan | a***@hyperbound.ai | 68.75 | 237877930071 | Yes (Create → Update, single record confirmed) |
+| Hologram | Stephen Chin | s***@hologram.io | 54.75 | populated (Contact ID assigned by HubSpot) | Partial (server-side native dedupe only; simplified gate bypassed explicit lookup-first check) |
  
 ## Step 3 close
  

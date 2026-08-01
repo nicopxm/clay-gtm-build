@@ -1,6 +1,13 @@
 # PROJECT_BRIEF.md — Clay GTM Table
-**Status:** Active · **Sprint length:** 3 working days · **Owner:** Wop
+**Status:** SHIPPED 2026-07-30 · **Sprint length:** 3 working days (planned) · **Owner:** Wop
 **Portfolio slot:** Project 2 of 4 · **Primary track served:** GTM Engineer / RevOps
+
+> **Read this as the pre-build spec, not a record of what shipped.** It is left unedited on purpose — the gap between it and the results is part of the record. Two scope figures below diverged from what was actually built, both for reasons documented elsewhere:
+>
+> - **§5 and §1 assume ~100–110 rows.** Clay's free tier caps tables at 50. A deliberate proportional subset was built instead — logic and proportionality checks in `subset_notes.md`.
+> - **§4 specs "the same 20 accounts" for the benchmark. It ran on 8.** Not a reduction in scope — 8 is how many of the 50 rows passed the ICP gate, and benchmarking a different or wider set would have broken the apples-to-apples comparison against Clay's own results. Rationale in `day2_debrief.md` Step 4, design decisions.
+>
+> §6's quality-bar checklist has been signed off against the finished `writeup.md` — see the verification line there.
 
 ---
 
@@ -73,6 +80,7 @@ Manual account research costs SDR teams hours per day and paid databases (ZoomIn
 - Capture per system: match rate %, cost per enriched lead, elapsed time, setup effort (qualitative).
 - Output: one comparison table + 3-sentence verdict on when to choose each.
 - Script (if needed) runs via Claude Code against the EXISTING n8n workflow. No new workflow building.
+- Amended at execution (2026-07-30): benchmark ran on all 8 gate-passers rather than a fixed 20. The 50-row subset produced 8 qualified accounts; benchmarking unqualified rows would have measured enrichment on companies the gate had already rejected.
 
 ## 5. Sprint Plan
 | Day | Output | Done means |
@@ -84,14 +92,15 @@ Manual account research costs SDR teams hours per day and paid databases (ZoomIn
 | 3 | Write-up + LinkedIn post | 2 pages, hiring-manager order, post drafted |
 
 ## 6. Write-up Quality Bar (hiring-manager checklist)
-- [ ] Opens with the business problem, not the tool
-- [ ] Waterfall ordering justified in cost terms
-- [ ] At least one conditional-logic decision explained
-- [ ] Scoring weights have written rationale
-- [ ] Honest numbers included (match rate, cost/lead) — including what failed
-- [ ] Ends in HubSpot with dedupe answered ("then what?" test)
-- [ ] Build-vs-buy verdict with benchmark data
-- [ ] Passes the 2-minute test: a design decision explainable without saying "Clay"
+**Verified against final writeup.md, 2026-08-01. All 8 items met.**
+- [x] Opens with the business problem, not the tool
+- [x] Waterfall ordering justified in cost terms
+- [x] At least one conditional-logic decision explained
+- [x] Scoring weights have written rationale
+- [x] Honest numbers included (match rate, cost/lead) — including what failed
+- [x] Ends in HubSpot with dedupe answered ("then what?" test)
+- [x] Build-vs-buy verdict with benchmark data
+- [x] Passes the 2-minute test: a design decision explainable without saying "Clay"
 
 ## 7. Out of Scope (PARKED — do not build)
 - More than 100 rows / list expansion
